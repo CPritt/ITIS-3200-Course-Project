@@ -4,6 +4,7 @@ from ecb import encrypt_ecb
 from cbc import encrypt_cbc, decrypt_cbc
 from hmac_utils import generate_tag, verify_tag
 from attacks.cbc_bitflip import bitflip
+from attacks.ecb_pattern import find_duplicate_blocks
 import os
 
 app = Flask(__name__)
@@ -44,6 +45,12 @@ def attack_bitflip():
         "tampered_ciphertext": flipped_ct,
         "corrupted_plaintext": corrupted_pt
     })
+
+@app.route("/attack/ecb-pattern", methods=["POST"])
+def ecb_pattern():
+    data = request.get_json()
+    result = find_duplicate_blocks(data["ciphertext"])
+    return jsonify(result)
 
 @app.route("/verify/hmac", methods=["POST"])
 def verify():
