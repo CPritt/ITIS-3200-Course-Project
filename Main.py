@@ -111,15 +111,25 @@ def AES_CTR_mode():
 
 def AES_ECB_mode():
     print("AES ECB mode")
-    plaintext = input("Enter plaintext: ")
+    plaintext = input("Enter plaintext: ").encode()
+
+    key = os.urandom(16)  # Generate a random 16-byte key
+
+
+    print("\n-------Setup for AES CTR mode-------")
+    print("plaintext:", plaintext.decode())
+    print(f"Generated Key: {key.hex()}")
+    print("\nEvery block is encrypted using the same key.")
+
+
 
 def AES_CBC_mode_fixed_IV():
     print("AES CBC mode (Fixed IV)")
-    plaintext = input("Enter plaintext: ")
+    plaintext = input("Enter plaintext: ").encode()
 
 def AES_CBC_mode_random_IV_HMAC():
     print("AES CBC mode (Random IV) + HMAC")
-    plaintext = input("Enter plaintext: ")
+    plaintext = input("Enter plaintext: ").encode()
 
 
 def main():

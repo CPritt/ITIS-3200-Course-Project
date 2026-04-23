@@ -5,8 +5,8 @@ An interactive console application that demonstrates how common encryption schem
 
 ## Dependencies
 - Python 3.x
-- cryptography — `pip install cryptography`
+- cryptography — `pip install cryptography` or `pip3 install cryptography` 
 
 ## Setup
 1. Install the required library using the command above
-2. Run the program with `python main.py`
+2. Run the program with `python main.py` or `python3 main.py`
