@@ -1,6 +1,7 @@
 import os ##for random generation
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding ## for ECB mode padding
 
 
 def AES_CTR_mode():
@@ -44,7 +45,7 @@ def AES_CTR_mode():
     print(f"\n  Ciphertext : {ciphertext.hex()}")
 
 
-    ##----------Decryption-------
+    ##----------Decryption------- using claude
     input("\nPress Enter to step through decryption...")
 
     print("\n-------Step 3: Decryption-------")
@@ -116,10 +117,75 @@ def AES_ECB_mode():
     key = os.urandom(16)  # Generate a random 16-byte key
 
 
-    print("\n-------Setup for AES CTR mode-------")
-    print("plaintext:", plaintext.decode())
-    print(f"Generated Key: {key.hex()}")
-    print("\nEvery block is encrypted using the same key.")
+    ##----------Setup-------
+    print("\n-------AES ECB Encryption-------")
+    print(f"Plaintext : {plaintext.decode()}")
+    print(f"Key       : {key.hex()}")
+    print("\nInputs: plaintext, 16-byte key")
+    print("ECB encrypts each 16-byte block independently with the same key.")
+    print("There is no IV or chaining.")
+ 
+    ##----------Encryption-------
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(plaintext) + padder.finalize()
+    blocks = [padded[i:i+16] for i in range(0, len(padded), 16)]
+ 
+    ciphertext_blocks = []
+    for block in blocks:
+        enc = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend()).encryptor()
+        ciphertext_blocks.append(enc.update(block) + enc.finalize())
+ 
+    ciphertext = b"".join(ciphertext_blocks)
+    print(f"\nCiphertext : {ciphertext.hex()}")
+ 
+    ##----------Decryption-------
+    input("\nPress Enter to see decryption...")
+ 
+    print("\n-------Decryption-------")
+    print("Each ciphertext block is decrypted independently with the same key.")
+ 
+    recovered_blocks = []
+    for block in ciphertext_blocks:
+        dec = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend()).decryptor()
+        recovered_blocks.append(dec.update(block) + dec.finalize())
+ 
+    unpadder = padding.PKCS7(128).unpadder()
+    plaintext_recovered = unpadder.update(b"".join(recovered_blocks)) + unpadder.finalize()
+    print(f"\nRecovered Plaintext : {plaintext_recovered.decode(errors='replace')}")
+ 
+    ##----------Vulnerability-------
+    input("\nPress Enter to see the ECB pattern vulnerability...")
+ 
+    print("\n-------Vulnerability - Pattern Leakage-------")
+    print("Identical plaintext blocks always produce identical ciphertext blocks.")
+    print("An attacker can detect repeated data without ever breaking the key.")
+    print()
+ 
+    repeat_msg = (plaintext * 3)[:48]
+    padder2 = padding.PKCS7(128).padder()
+    repeat_padded = padder2.update(repeat_msg) + padder2.finalize()
+    repeat_blocks = [repeat_padded[i:i+16] for i in range(0, len(repeat_padded), 16)]
+ 
+    repeat_ct_blocks = []
+    for block in repeat_blocks:
+        enc = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend()).encryptor()
+        repeat_ct_blocks.append(enc.update(block) + enc.finalize())
+ 
+    print(f"Repeating plaintext : {repeat_msg.decode(errors='replace')}")
+    print("Ciphertext blocks:")
+    for i, (pb, cb) in enumerate(zip(repeat_blocks, repeat_ct_blocks)):
+        marker = " <-- DUPLICATE" if repeat_ct_blocks.count(cb) > 1 else ""
+        print(f"  Block {i}: {cb.hex()}{marker}")
+ 
+    print("\nDuplicate plaintext blocks produce duplicate ciphertext blocks,")
+    print("leaking the structure of the data to any observer.")
+ 
+    ##----------Fix-------
+    print("\n-------Fix-------")
+    print("Never use ECB mode for encrypting more than one block of sensitive data.")
+    print("Use CBC with a random IV, or CTR with a unique nonce instead.")
+ 
+    input("\nPress Enter to return to the menu...")
 
 
 
