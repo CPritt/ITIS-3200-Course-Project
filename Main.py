@@ -1,7 +1,9 @@
 import os ##for random generation
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes ## AES encryption
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import padding ## for ECB mode padding
+import hmac 
+import hashlib 
 
 
 def AES_CTR_mode():
@@ -192,10 +194,190 @@ def AES_ECB_mode():
 def AES_CBC_mode_fixed_IV():
     print("AES CBC mode (Fixed IV)")
     plaintext = input("Enter plaintext: ").encode()
+ 
+    key = os.urandom(16)
+    iv  = b'\x00' * 16     # Fixed all-zero IV — the vulnerability
+ 
+    ##----------Setup-------
+    print("\n-------AES CBC Encryption (Fixed IV)-------")
+    print(f"Plaintext : {plaintext.decode()}")
+    print(f"Key       : {key.hex()}")
+    print(f"IV        : {iv.hex()}  <-- fixed, same every time")
+    print("\nInputs: plaintext, 16-byte key, 16-byte IV")
+    print("CBC XORs each plaintext block with the previous ciphertext block")
+    print("(or the IV for the first block) before encrypting with AES.")
+ 
+    ##----------Encryption-------
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(plaintext) + padder.finalize()
+    blocks = [padded[i:i+16] for i in range(0, len(padded), 16)]
+ 
+    prev = iv
+    ciphertext_blocks = []
+    for block in blocks:
+        xored = bytes(a ^ b for a, b in zip(block, prev))
+        enc = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend()).encryptor()
+        ct_block = enc.update(xored) + enc.finalize()
+        ciphertext_blocks.append(ct_block)
+        prev = ct_block
+ 
+    ciphertext = b"".join(ciphertext_blocks)
+    print(f"\nCiphertext : {ciphertext.hex()}")
+ 
+    ##----------Decryption-------
+    input("\nPress Enter to see decryption...")
+ 
+    print("\n-------Decryption-------")
+    print("Each ciphertext block is decrypted, then XORed with the previous")
+    print("ciphertext block (or the IV for block 0) to recover the plaintext.")
+ 
+    prev = iv
+    recovered_blocks = []
+    for block in ciphertext_blocks:
+        dec = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend()).decryptor()
+        pt_block = bytes(a ^ b for a, b in zip(dec.update(block) + dec.finalize(), prev))
+        recovered_blocks.append(pt_block)
+        prev = block
+ 
+    unpadder = padding.PKCS7(128).unpadder()
+    plaintext_recovered = unpadder.update(b"".join(recovered_blocks)) + unpadder.finalize()
+    print(f"\nRecovered Plaintext : {plaintext_recovered.decode(errors='replace')}")
+ 
+    ##----------Vulnerability-------
+    input("\nPress Enter to see the fixed-IV vulnerability...")
+ 
+    print("\n-------Vulnerability - Fixed IV Leaks Repeated Plaintexts-------")
+    print("With a fixed IV, encrypting the same message twice always produces")
+    print("identical ciphertext. An attacker can immediately detect repeated messages.")
+    print()
+ 
+    prev = iv
+    ct2_blocks = []
+    for block in blocks:
+        xored = bytes(a ^ b for a, b in zip(block, prev))
+        enc = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend()).encryptor()
+        ct_block = enc.update(xored) + enc.finalize()
+        ct2_blocks.append(ct_block)
+        prev = ct_block
+ 
+    ciphertext2 = b"".join(ct2_blocks)
+    print(f"Encryption 1 : {ciphertext.hex()}")
+    print(f"Encryption 2 : {ciphertext2.hex()}")
+    if ciphertext == ciphertext2:
+        print("\nBoth ciphertexts are IDENTICAL.")
+        print("An attacker learns the same plaintext was sent without decrypting anything.")
+    else:
+        print("\n(Try entering the same plaintext twice to see identical ciphertexts.)")
+ 
+    ##----------Fix-------
+    print("\n-------Fix-------")
+    print("Always generate a fresh random IV for every encryption.")
+    print("See option [4] for a secure CBC implementation with a random IV and HMAC.")
+ 
+    input("\nPress Enter to return to the menu...")
 
 def AES_CBC_mode_random_IV_HMAC():
     print("AES CBC mode (Random IV) + HMAC")
     plaintext = input("Enter plaintext: ").encode()
+ 
+    key_enc = os.urandom(16)
+    key_mac = os.urandom(32)
+    iv      = os.urandom(16)
+ 
+    ##----------Setup-------
+    print("\n-------AES CBC Encryption (Random IV) + HMAC-------")
+    print(f"Plaintext   : {plaintext.decode()}")
+    print(f"Encrypt Key : {key_enc.hex()}")
+    print(f"HMAC Key    : {key_mac.hex()}")
+    print(f"Random IV   : {iv.hex()}")
+    print("\nInputs: plaintext, 16-byte AES key, 32-byte HMAC key, random 16-byte IV")
+    print("CBC encrypts with a fresh random IV so the same plaintext always produces")
+    print("a different ciphertext. HMAC-SHA256 is then computed over IV + ciphertext")
+    print("(Encrypt-then-MAC) to guarantee integrity.")
+ 
+    ##----------Encryption-------
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(plaintext) + padder.finalize()
+    blocks = [padded[i:i+16] for i in range(0, len(padded), 16)]
+ 
+    prev = iv
+    ciphertext_blocks = []
+    for block in blocks:
+        xored = bytes(a ^ b for a, b in zip(block, prev))
+        enc = Cipher(algorithms.AES(key_enc), modes.ECB(), backend=default_backend()).encryptor()
+        ct_block = enc.update(xored) + enc.finalize()
+        ciphertext_blocks.append(ct_block)
+        prev = ct_block
+ 
+    ciphertext = b"".join(ciphertext_blocks)
+    tag = hmac.new(key_mac, iv + ciphertext, hashlib.sha256).digest()
+    transmitted = iv + ciphertext + tag
+ 
+    print(f"\nCiphertext  : {ciphertext.hex()}")
+    print(f"HMAC tag    : {tag.hex()}")
+    print(f"Transmitted : IV || Ciphertext || HMAC tag")
+ 
+    ##----------Decryption and Verification-------
+    input("\nPress Enter to see verification and decryption...")
+ 
+    print("\n-------Verification and Decryption-------")
+    print("The receiver verifies the HMAC first. If it fails, the message is rejected.")
+ 
+    recv_iv  = transmitted[:16]
+    recv_ct  = transmitted[16:-32]
+    recv_tag = transmitted[-32:]
+ 
+    tag_valid = hmac.compare_digest(
+        hmac.new(key_mac, recv_iv + recv_ct, hashlib.sha256).digest(),
+        recv_tag
+    )
+    print(f"\nHMAC valid : {tag_valid}")
+ 
+    if not tag_valid:
+        print("HMAC verification FAILED. Message rejected.")
+        input("\nPress Enter to return to the menu...")
+        return
+ 
+    prev = recv_iv
+    recovered_blocks = []
+    for block in [recv_ct[i:i+16] for i in range(0, len(recv_ct), 16)]:
+        dec = Cipher(algorithms.AES(key_enc), modes.ECB(), backend=default_backend()).decryptor()
+        pt_block = bytes(a ^ b for a, b in zip(dec.update(block) + dec.finalize(), prev))
+        recovered_blocks.append(pt_block)
+        prev = block
+ 
+    unpadder = padding.PKCS7(128).unpadder()
+    plaintext_recovered = unpadder.update(b"".join(recovered_blocks)) + unpadder.finalize()
+    print(f"Recovered Plaintext : {plaintext_recovered.decode(errors='replace')}")
+ 
+    ##----------Tamper Demo-------
+    input("\nPress Enter to see HMAC catch a tampered message...")
+ 
+    print("\n-------Tamper Detection-------")
+    print("We flip one byte in the ciphertext and re-verify the HMAC.")
+    print()
+ 
+    tampered = bytearray(transmitted)
+    tampered[16] ^= 0xFF
+    tampered = bytes(tampered)
+ 
+    tamper_valid = hmac.compare_digest(
+        hmac.new(key_mac, tampered[:16] + tampered[16:-32], hashlib.sha256).digest(),
+        tampered[-32:]
+    )
+    print(f"Original CT byte 16    : {transmitted[16]:02x}")
+    print(f"Tampered CT byte 16    : {tampered[16]:02x}")
+    print(f"HMAC valid after tamper: {tamper_valid}")
+    print("\nThe HMAC catches the modification before any decryption is attempted.")
+ 
+    ##----------Why This Is Secure-------
+    print("\n-------Why This Is Secure-------")
+    print("Random IV        : fresh IV per message prevents identical ciphertexts.")
+    print("Encrypt-then-MAC : HMAC over IV + ciphertext blocks bit-flipping and")
+    print("                   padding-oracle attacks.")
+    print("Separate keys    : AES and HMAC keys are independent.")
+ 
+    input("\nPress Enter to return to the menu...")
 
 
 def main():
