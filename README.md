@@ -18,3 +18,7 @@ An interactive console application that demonstrates how common symmetric encryp
 
 This program allows the user to choose different AES encryption modes and step through the encryption and decryption process for each one. It also demonstrates a real vulnerability for each mode, showing a concrete fail case so the user can see exactly how and why the scheme breaks down.
 The goal is to provide a hands-on learning experience for entry-level symmetric key encryption, covering how each mode works and what makes some configurations insecure.
+
+## implementations and attacks
+
+We implemented four AES encryption schemes: CTR, ECB, CBC with a fixed IV, and CBC with a random IV and HMAC. For each scheme, we demonstrate a real attack or vulnerability that exposes a weakness in that configuration.
